@@ -65,6 +65,7 @@ class RegionStatistic(Simple):
             msks = [ips.img]
         else: 
             msks = ips.imgs
+            imgs = inten.imgs
             if len(msks)==1:
                 msks *= len(imgs)
         buf = imgs[0].astype(np.uint16)
@@ -152,7 +153,7 @@ class IntensityFilter(Filter):
     def run(self, ips, snap, img, para = None):
         intenimg = WindowsManager.get(para['inten']).ips.img
         strc = ndimage.generate_binary_structure(2, 1 if para['con']=='4-connect' else 2)
-        buf, n = ndimage.label(snap, strc, output=np.uint16)
+        buf, n = ndimage.label(snap, strc, output=np.uint32)
         index = range(1, n+1)
         idx = (np.ones(n+1)*para['front']).astype(np.uint8)
         msk = np.ones(n, dtype=np.bool)

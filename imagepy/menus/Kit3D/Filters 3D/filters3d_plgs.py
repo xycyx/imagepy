@@ -78,11 +78,11 @@ class UPWatershed(Filter):
 		ips.lut = self.buflut
 		ips.update = 'pix'
 
-	def preview(self, para):
-		self.ips.lut[:] = self.buflut
-		self.ips.lut[:para['thr1']] = [0,255,0]
-		self.ips.lut[para['thr2']:] = [255,0,0]
-		self.ips.update = 'pix'
+	def preview(self, ips, para):
+		ips.lut[:] = self.buflut
+		ips.lut[:para['thr1']] = [0,255,0]
+		ips.lut[para['thr2']:] = [255,0,0]
+		ips.update = 'pix'
 
 	#process
 	def run(self, ips, snap, img, para = None):
@@ -94,12 +94,12 @@ class UPWatershed(Filter):
 		gradient **= 0.5
 
 		msk = np.zeros(imgs.shape, dtype=np.uint8)
-		msk[imgs>para['thr2']] = 2
-		msk[imgs<para['thr1']] = 1
+		msk[imgs>para['thr2']] = 1
+		msk[imgs<para['thr1']] = 2
 
 		#rst = watershed(gradient, msk)
 		rst = watershed(gradient, msk.astype(np.uint16))
-		imgs[:] = (rst!=1)*255
+		imgs[:] = (rst==1)*255
 		ips.lut = self.buflut
 
 plgs = [Gaussian3D, Uniform3D, '-', Sobel3D, USM3D, '-', UPWatershed]

@@ -8,7 +8,8 @@ import threading
 
 from ... import IPy
 from ...ui.panelconfig import ParaDialog
-from ..manager import TextLogManager, TaskManager
+from ..manager import TextLogManager, TaskManager, WidgetsManager
+from time import time
 
 class Simple:
     title = 'SimpleFilter'
@@ -17,6 +18,7 @@ class Simple:
     'all, 8-bit, 16-bit, rgb, float, req_roi, stack, stack2d, stack3d'
     view = None
     prgs = (None, 1)
+    modal = True
 
     def __init__(self, ips=None):
         print('simple start')
@@ -26,20 +28,36 @@ class Simple:
     def progress(self, i, n):
         self.prgs = (i, n)
 
-    def load(self, ips):
-        return True
+    def load(self, ips):return True
         
+    def preview(self, ips, para):pass
+
     def show(self):
         if self.view==None:return wx.ID_OK
         self.dialog = ParaDialog(IPy.get_window(), self.title)
-        self.dialog.init_view(self.view, self.para, modal=True)
-        return self.dialog.ShowModal()
+        self.dialog.init_view(self.view, self.para, 'preview' in self.note, modal=self.modal)
+        self.dialog.set_handle(lambda x:self.preview(self.ips, self.para))
+        if self.modal: return self.dialog.ShowModal()
+        self.dialog.on_ok = lambda : self.ok(self.ips)
+        self.dialog.on_cancel = lambda : self.cancel(self.ips)
+        self.dialog.Show()
     
     def run(self, ips, imgs, para = None):pass
         
+    def cancel(self, ips):pass
+
+    def ok(self, ips, para=None, callafter=None):
+        if para == None: para = self.para
+        threading.Thread(target = self.runasyn, 
+                    args = (ips, ips.imgs, para, callafter)).start()
+        win = WidgetsManager.getref('Macros Recorder')
+        if win!=None: win.write('{}>{}'.format(self.title, para))
+
     def runasyn(self,  ips, imgs, para = None, callback = None):
         TaskManager.add(self)
+        start = time()
         self.run(ips, imgs, para)
+        IPy.set_info('%s: cost %.3fs'%(ips.title, time()-start))
         ips.update = 'pix'
         TaskManager.remove(self)
         if callback!=None:callback()
@@ -60,9 +78,12 @@ class Simple:
                 IPy.alert('do not surport 8-bit image')
                 return False
             elif ips.get_imgtype()=='16-bit' and not '16-bit' in note:
-                IPy.alert('do not surport 16-bit image')
+                IPy.alert('do not surport 16-bit uint image')
                 return False
-            elif ips.get_imgtype()=='float' and not 'float' in note:
+            elif ips.get_imgtype()=='32-int' and not 'int' in note:
+                IPy.alert('do not surport 32-bit int uint image')
+                return False
+            elif 'float' in ips.get_imgtype() and not 'float' in note:
                 IPy.alert('do not surport float image')
                 return False
         if sum([i in note for i in ('stack','stack2d','stack3d')])>0:
@@ -82,13 +103,18 @@ class Simple:
         #print self.title, para
         if not self.check(self.ips):return
         if not self.load(self.ips):return
-        if para!=None or self.show() == wx.ID_OK:
-            if para == None:para = self.para
-            win = TextLogManager.get('Recorder')
-            if win!=None: win.append('{}>{}'.format(self.title, para))
-            #self.run(self.ips, self.ips.imgs, para)
-            t =threading.Thread(target = self.runasyn, 
-                args = (self.ips, self.ips.imgs, para, callback))
-            t.start()
 
-        if self.dialog!=None:self.dialog.Destroy()
+
+        if para!=None:
+            self.ok(self.ips, para, callback)
+        elif self.view==None:
+            if not self.__class__.show is Simple.show:
+                if self.show() == wx.ID_OK:
+                    self.ok(self.ips, para, callback)
+            else: self.ok(self.ips, para, callback)
+        elif self.modal:
+            if self.show() == wx.ID_OK:
+                self.ok(self.ips, para, callback)
+            else:self.cancel(self.ips)
+            if not self.dialog is None: self.dialog.Destroy()
+        else: self.show()
